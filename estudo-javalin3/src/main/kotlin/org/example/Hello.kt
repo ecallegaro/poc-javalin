@@ -5,14 +5,47 @@ import io.javalin.apibuilder.ApiBuilder.post
 import io.javalin.apibuilder.ApiBuilder.delete
 import io.javalin.apibuilder.ApiBuilder.patch
 import io.javalin.Javalin
+import io.javalin.http.InternalServerErrorResponse
+import io.javalin.http.ServiceUnavailableResponse
+import io.javalin.plugin.openapi.OpenApiOptions
+import io.javalin.plugin.openapi.OpenApiPlugin
+import io.javalin.plugin.openapi.ui.ReDocOptions
+import io.javalin.plugin.openapi.ui.SwaggerOptions
+import io.swagger.v3.oas.models.info.Info
 
 fun main(args: Array<String>) {
     val userDao = UserDao()
 
-    val app = Javalin.create().apply {
+    val app = Javalin.create{
+
+        fun getConfiguredOpenApiPlugin() = OpenApiPlugin(
+            OpenApiOptions(
+                Info().apply {
+                    version("1.0")
+                    description("User API")
+                }
+            ).apply {
+                path("/swagger-docs") // endpoint for OpenAPI json
+                swagger(SwaggerOptions("/swagger-ui")) // endpoint for swagger-ui
+                reDoc(ReDocOptions("/redoc")) // endpoint for redoc
+                defaultDocumentation { doc ->
+                    doc.json("500", InternalServerErrorResponse::class.java)
+                    doc.json("503", ServiceUnavailableResponse::class.java)
+                }
+            }
+        )
+
+        it.registerPlugin(getConfiguredOpenApiPlugin())
+        it.defaultContentType = "application/json"
+
+    }.
+    apply {
         exception(Exception::class.java) { e, ctx -> e.printStackTrace() }
         error(404) { ctx -> ctx.json("not found") }
     }.start(7000)
+
+    println("Check out ReDoc docs at http://localhost:7000/redoc")
+    println("Check out Swagger UI docs at http://localhost:7000/swagger-ui")
 
     app.routes {
 
